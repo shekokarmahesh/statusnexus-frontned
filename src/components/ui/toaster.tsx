@@ -31,3 +31,6 @@ export function Toaster() {
     </ToastProvider>
   )
 }
+
+// Make sure we have a default export as well
+export default Toaster;
