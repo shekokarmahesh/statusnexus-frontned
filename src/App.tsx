@@ -22,7 +22,9 @@ import Services from "./pages/dashboard/Services";
 import Incidents from "./pages/dashboard/Incidents";
 import Maintenance from "./pages/dashboard/Maintenance";
 import Settings from "./pages/dashboard/Settings";
+import {Uptime} from "./pages/dashboard/Uptime";
 
+import { AuthProvider } from "./context/AuthContext";
 
 // Not Found
 import NotFound from "./pages/NotFound";
@@ -41,103 +43,106 @@ if (!clerkPubKey) {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    {clerkPubKey ? (
-      <ClerkProvider 
-        publishableKey={clerkPubKey}
-        signInFallbackRedirectUrl="/auth-success"
-        signUpFallbackRedirectUrl="/auth-success"
-        signInUrl="/sign-in"
-        signUpUrl="/sign-up"
-      >
-        <ThemeProvider defaultTheme="system" storageKey="status-dashboard-theme">
-          <ServiceProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-              <BrowserRouter>
-                <Routes>
-                  {/* Landing Page */}
-                  <Route path="/landing" element={<Landing />} />
-                  
-                  {/* Public Routes */}
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/public" element={<PublicStatusPage />} />
-                  
-                  {/* Auth Routes */}
-                  <Route path="/sign-in/*" element={<SignInPage />} />
-                  <Route path="/sign-up/*" element={<SignUpPage />} />
-                  <Route path="/auth-success" element={<AuthSuccess />} />
-
-                  {/* Protected Routes */}
-                  <Route 
-                    path="/create-team" 
-                    element={
-                      <ProtectedRoute>
-                        <CreateOrganizationPage />
-                      </ProtectedRoute>
-                    } 
-                  />
-                  <Route 
-                    path="/team-settings" 
-                    element={
-                      <ProtectedRoute>
-                        <OrganizationCheck>
-                          <OrganizationProfilePage />
-                        </OrganizationCheck>
-                      </ProtectedRoute>
-                    } 
-                  />
-                  
-                  {/* Dashboard Routes - Consolidated with protection */}
-                  <Route 
-                    path="/dashboard" 
-                    element={
-                      <ProtectedRoute>
-                        <OrganizationCheck>
-                          <DashboardLayout />
-                        </OrganizationCheck>
-                      </ProtectedRoute>
-                    }
-                  >
-                    <Route index element={<Dashboard />} />
-                    <Route path="services" element={<Services />} />
-                    <Route path="incidents" element={<Incidents />} />
-                    <Route path="maintenance" element={<Maintenance />} />
+  <AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      {clerkPubKey ? (
+        <ClerkProvider 
+          publishableKey={clerkPubKey}
+          signInFallbackRedirectUrl="/auth-success"
+          signUpFallbackRedirectUrl="/auth-success"
+          signInUrl="/sign-in"
+          signUpUrl="/sign-up"
+        >
+          <ThemeProvider defaultTheme="system" storageKey="status-dashboard-theme">
+            <ServiceProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <Routes>
+                    {/* Landing Page */}
+                    <Route path="/landing" element={<Landing />} />
                     
-                    <Route path="settings" element={<Settings />} />
-                  </Route>
-                  
-                  {/* Legacy Index (redirects to landing) */}
-                  <Route path="/index" element={<Index />} />
-                  
-                  {/* Catch-all Route */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
-            </TooltipProvider>
-          </ServiceProvider>
+                    {/* Public Routes */}
+                    <Route path="/" element={<Landing />} />
+                    <Route path="/public" element={<PublicStatusPage />} />
+                    
+                    {/* Auth Routes */}
+                    <Route path="/sign-in/*" element={<SignInPage />} />
+                    <Route path="/sign-up/*" element={<SignUpPage />} />
+                    <Route path="/auth-success" element={<AuthSuccess />} />
+
+                    {/* Protected Routes */}
+                    <Route 
+                      path="/create-team" 
+                      element={
+                        <ProtectedRoute>
+                          <CreateOrganizationPage />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    <Route 
+                      path="/team-settings" 
+                      element={
+                        <ProtectedRoute>
+                          <OrganizationCheck>
+                            <OrganizationProfilePage />
+                          </OrganizationCheck>
+                        </ProtectedRoute>
+                      } 
+                    />
+                    
+                    {/* Dashboard Routes - Consolidated with protection */}
+                    <Route 
+                      path="/dashboard" 
+                      element={
+                        <ProtectedRoute>
+                          <OrganizationCheck>
+                            <DashboardLayout />
+                          </OrganizationCheck>
+                        </ProtectedRoute>
+                      }
+                    >
+                      <Route index element={<Dashboard />} />
+                      <Route path="services" element={<Services />} />
+                      <Route path="incidents" element={<Incidents />} />
+                      <Route path="maintenance" element={<Maintenance />} />
+                      <Route path="settings" element={<Settings />} />
+                      <Route path="uptime" element={<Uptime />} />
+                      
+                    </Route>
+                    
+                    {/* Legacy Index (redirects to landing) */}
+                    <Route path="/index" element={<Index />} />
+                    
+                    {/* Catch-all Route */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
+              </TooltipProvider>
+            </ServiceProvider>
+          </ThemeProvider>
+        </ClerkProvider>
+      ) : (
+        // Provide a fallback when there's no valid Clerk key
+        <ThemeProvider defaultTheme="system" storageKey="status-dashboard-theme">
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                {/* Include only public routes when Clerk isn't available */}
+                <Route path="/" element={<Landing />} />
+                <Route path="/landing" element={<Landing />} />
+                <Route path="/public" element={<PublicStatusPage />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
         </ThemeProvider>
-      </ClerkProvider>
-    ) : (
-      // Provide a fallback when there's no valid Clerk key
-      <ThemeProvider defaultTheme="system" storageKey="status-dashboard-theme">
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              {/* Include only public routes when Clerk isn't available */}
-              <Route path="/" element={<Landing />} />
-              <Route path="/landing" element={<Landing />} />
-              <Route path="/public" element={<PublicStatusPage />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ThemeProvider>
-    )}
-  </QueryClientProvider>
+      )}
+    </QueryClientProvider>
+  </AuthProvider>
 );
 
 export default App;

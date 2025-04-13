@@ -11,7 +11,8 @@ import {
   Menu,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -63,6 +64,9 @@ const DashboardLayout = () => {
     { name: "Services", path: "/dashboard/services", icon: Server },
     { name: "Incidents", path: "/dashboard/incidents", icon: AlertTriangle },
     { name: "Maintenance", path: "/dashboard/maintenance", icon: Clock },
+    { name: "Uptime Monitor", path: "/dashboard/uptime", icon: Monitor },
+
+
     { 
       name: "Settings", 
       path: "/dashboard/settings", 
