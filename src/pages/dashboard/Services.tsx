@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useServices, Service, ServiceStatus } from "@/contexts/ServiceContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,45 +46,108 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, MoreVertical, PenSquare, Trash2, Search, XCircle } from "lucide-react";
+import { Plus, MoreVertical, Trash2, Search, XCircle, Pencil } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@clerk/clerk-react";
 
 const Services = () => {
-  const { services, serviceGroups, addService, updateService, deleteService, addServiceGroup } = useServices();
+  const { services, serviceGroups, addService, updateService, deleteService } = useServices();
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
-  const [isAddGroupOpen, setIsAddGroupOpen] = useState(false);
   const [isEditServiceOpen, setIsEditServiceOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+  const [apiServices, setApiServices] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { getToken } = useAuth();
   
-  // Form state for adding a new service
+  const [editingService, setEditingService] = useState<{
+    _id: string;
+    name: string;
+    description: string;
+    status: ServiceStatus;
+    group: string;
+  } | null>(null);
+
   const [newService, setNewService] = useState({
     name: "",
     description: "",
     status: "operational" as ServiceStatus,
-    groupId: "",
+    group: "",
   });
   
-  // Form state for adding a new group
-  const [newGroup, setNewGroup] = useState({
-    name: "",
-  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Add a new state to control the confirmation dialog visibility
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [serviceToDelete, setServiceToDelete] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchServices = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const token = await getToken();
+        
+        if (!token) {
+          throw new Error("Authentication token is missing. Please log in again.");
+        }
+        
+        const response = await fetch('http://localhost:3000/api/services', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`API request failed with status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+          setApiServices(data);
+        } else if (data && typeof data === 'object' && data.services) {
+          setApiServices(data.services);
+        } else {
+          console.warn('API response is not in expected format:', data);
+          setApiServices([]);
+        }
+      } catch (err) {
+        console.error('Error fetching services:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch services');
+        setApiServices([]);
+        toast({
+          title: "Error fetching services",
+          description: err instanceof Error ? err.message : 'An error occurred',
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchServices();
+  }, [toast, getToken]);
   
-  // Filter services based on search query
-  const filteredServices = services.filter(service => 
-    service.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    service.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredApiServices = searchQuery.trim() === '' 
+    ? apiServices
+    : apiServices.filter(service => 
+        service.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        service.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        service.group?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
   
-  // Function to get status badge
   const getStatusBadge = (status: ServiceStatus) => {
     switch (status) {
       case "operational":
         return <Badge className="bg-status-operational hover:bg-status-operational">Operational</Badge>;
-      case "degraded":
-        return <Badge className="bg-status-degraded hover:bg-status-degraded">Degraded</Badge>;
+      case "degraded_performance":
+        return <Badge className="bg-status-degraded hover:bg-status-degraded">Degraded Performance</Badge>;
       case "partial_outage":
         return <Badge className="bg-status-partial hover:bg-status-partial">Partial Outage</Badge>;
       case "major_outage":
@@ -97,81 +159,216 @@ const Services = () => {
     }
   };
   
-  // Handle add service form submission
-  const handleAddService = () => {
-    addService({
-      name: newService.name,
-      description: newService.description,
-      status: newService.status,
-      groupId: newService.groupId || undefined,
-      uptime: 99.9, // Default uptime
-    });
+  const handleAddService = async () => {
+    if (!newService.name || !newService.description) return;
     
-    toast({
-      title: "Service added",
-      description: `${newService.name} has been added successfully.`
-    });
+    setIsSubmitting(true);
     
-    // Reset form and close dialog
-    setNewService({
-      name: "",
-      description: "",
-      status: "operational",
-      groupId: "",
-    });
-    setIsAddServiceOpen(false);
+    try {
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      let groupName = "Other";
+      if (newService.group && newService.group !== "none") {
+        const selectedGroup = serviceGroups.find(g => g.id === newService.group);
+        if (selectedGroup) {
+          switch(selectedGroup.name) {
+            case "Frontend":
+              groupName = "Frontend Services";
+              break;
+            case "Backend":
+              groupName = "Backend Services";
+              break;
+            case "Billing":
+              groupName = "Billing Services";
+              break;
+            default:
+              groupName = "Other";
+          }
+        }
+      }
+      
+      const response = await fetch('http://localhost:3000/api/services', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: newService.name,
+          description: newService.description,
+          group: groupName
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to add service (Status: ${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      setApiServices(prevServices => [...prevServices, data.service]);
+      
+      toast({
+        title: "Service added",
+        description: `${newService.name} has been added successfully.`
+      });
+      
+      setNewService({
+        name: "",
+        description: "",
+        status: "operational",
+        group: ""
+      });
+      setIsAddServiceOpen(false);
+      
+    } catch (err) {
+      console.error('Error adding service:', err);
+      toast({
+        title: "Error adding service",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-  
-  // Handle add group form submission
-  const handleAddGroup = () => {
-    addServiceGroup({
-      name: newGroup.name,
-      services: [],
+
+  const handleOpenEditDialog = (service: any) => {
+    setEditingService({
+      _id: service._id,
+      name: service.name,
+      description: service.description || "",
+      status: service.status || "operational",
+      group: service.group || "Other"
     });
-    
-    toast({
-      title: "Group added",
-      description: `${newGroup.name} has been added successfully.`
-    });
-    
-    // Reset form and close dialog
-    setNewGroup({
-      name: "",
-    });
-    setIsAddGroupOpen(false);
-  };
-  
-  // Open edit service dialog
-  const openEditServiceDialog = (service: Service) => {
-    setEditingService(service);
     setIsEditServiceOpen(true);
   };
   
-  // Handle edit service form submission
-  const handleEditService = () => {
-    if (editingService) {
-      updateService(editingService.id, editingService);
+  const handleEditService = async () => {
+    if (!editingService || !editingService.name || !editingService.description) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      const response = await fetch(`http://localhost:3000/api/services/${editingService._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: editingService.name,
+          description: editingService.description,
+          status: editingService.status,
+          group: editingService.group
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to update service (Status: ${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      setApiServices(prevServices => prevServices.map(service => 
+        service._id === editingService._id ? data.service : service
+      ));
       
       toast({
         title: "Service updated",
         description: `${editingService.name} has been updated successfully.`
       });
       
-      setIsEditServiceOpen(false);
       setEditingService(null);
+      setIsEditServiceOpen(false);
+      
+    } catch (err) {
+      console.error('Error updating service:', err);
+      toast({
+        title: "Error updating service",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
-  
-  // Handle delete service
-  const handleDeleteService = (serviceId: string) => {
-    const serviceToDelete = services.find(s => s.id === serviceId);
-    if (serviceToDelete) {
-      deleteService(serviceId);
+
+  const confirmDeleteService = (service: any) => {
+    setServiceToDelete(service);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteService = async () => {
+    if (!serviceToDelete || !serviceToDelete._id) {
+      toast({
+        title: "Error",
+        description: "Cannot delete service: missing service ID",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      // Make DELETE request to API endpoint
+      const response = await fetch(`http://localhost:3000/api/services/${serviceToDelete._id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 403) {
+          throw new Error("You don't have permission to delete services. Admin role required.");
+        } else {
+          throw new Error(errorData.message || `Failed to delete service (Status: ${response.status})`);
+        }
+      }
+      
+      // Update local state by removing the deleted service
+      setApiServices(prevServices => prevServices.filter(s => s._id !== serviceToDelete._id));
       
       toast({
         title: "Service deleted",
         description: `${serviceToDelete.name} has been deleted successfully.`
       });
+      
+      // Close the dialog
+      setIsDeleteConfirmOpen(false);
+      setServiceToDelete(null);
+      
+    } catch (err) {
+      console.error('Error deleting service:', err);
+      toast({
+        title: "Error deleting service",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -186,9 +383,6 @@ const Services = () => {
         </div>
         
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-          <Button variant="outline" onClick={() => setIsAddGroupOpen(true)}>
-            Add Group
-          </Button>
           <Button onClick={() => setIsAddServiceOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Service
@@ -196,7 +390,6 @@ const Services = () => {
         </div>
       </div>
       
-      {/* Search and filters */}
       <div className="flex items-center space-x-2">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -217,24 +410,48 @@ const Services = () => {
         </div>
       </div>
       
-      {/* Service list */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Service List</CardTitle>
+          <CardTitle>Services List</CardTitle>
           <CardDescription>
-            Total services: {services.length}
+            {searchQuery.trim() !== '' ? 
+              `Showing ${filteredApiServices.length} of ${apiServices.length} services` : 
+              `Total services: ${apiServices.length}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredServices.length === 0 ? (
-            <div className="text-center py-10">
-              <p className="text-muted-foreground">No services found.</p>
-              <Button
-                variant="link"
-                onClick={() => setIsAddServiceOpen(true)}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+              <span className="ml-3">Loading services...</span>
+            </div>
+          ) : error ? (
+            <div className="bg-destructive/15 text-destructive p-4 rounded-md">
+              <p className="font-semibold">Error loading services</p>
+              <p className="text-sm">{error}</p>
+              <Button 
+                variant="outline" 
                 className="mt-2"
+                onClick={() => window.location.reload()}
               >
-                Add your first service
+                Try again
+              </Button>
+            </div>
+          ) : apiServices.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No services found from API.</p>
+            </div>
+          ) : filteredApiServices.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                No services matching "<span className="font-medium">{searchQuery}</span>".
+              </p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setSearchQuery("")}
+              >
+                Clear search
               </Button>
             </div>
           ) : (
@@ -244,26 +461,18 @@ const Services = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Group</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Last Updated</TableHead>
-                    <TableHead className="w-24">Actions</TableHead>
+                    <TableHead>Group</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredServices.map((service) => (
-                    <TableRow key={service.id}>
+                  {filteredApiServices.map((service) => (
+                    <TableRow key={service._id || `service-${service.name}-${Math.random()}`}>
                       <TableCell className="font-medium">{service.name}</TableCell>
-                      <TableCell>{service.description}</TableCell>
-                      <TableCell>
-                        {service.groupId ? 
-                          serviceGroups.find(group => group.id === service.groupId)?.name || "-"
-                          : "-"}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(service.status)}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDistanceToNow(new Date(service.lastUpdated))} ago
-                      </TableCell>
+                      <TableCell>{service.description || "N/A"}</TableCell>
+                      <TableCell>{getStatusBadge(service.status as ServiceStatus)}</TableCell>
+                      <TableCell className="font-medium text-l">{service.group}</TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -274,13 +483,13 @@ const Services = () => {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openEditServiceDialog(service)}>
-                              <PenSquare className="mr-2 h-4 w-4" />
+                            <DropdownMenuItem onClick={() => handleOpenEditDialog(service)}>
+                              <Pencil className="mr-2 h-4 w-4" />
                               Edit Service
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem 
-                              onClick={() => handleDeleteService(service.id)}
+                              onClick={() => confirmDeleteService(service)}
                               className="text-destructive focus:text-destructive"
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
@@ -298,7 +507,6 @@ const Services = () => {
         </CardContent>
       </Card>
       
-      {/* Add Service Dialog */}
       <Dialog open={isAddServiceOpen} onOpenChange={setIsAddServiceOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -330,29 +538,27 @@ const Services = () => {
             </div>
             
             <div className="grid gap-2">
-              <Label htmlFor="group">Group (Optional)</Label>
+              <Label htmlFor="group">Group</Label>
               <Select 
-                value={newService.groupId} 
-                onValueChange={(value) => setNewService({...newService, groupId: value})}
+                value={newService.group || "Other"} 
+                onValueChange={(value) => setNewService({...newService, group: value})}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a group" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="">None</SelectItem>
-                    {serviceGroups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="Frontend Services">Frontend Services</SelectItem>
+                    <SelectItem value="Backend Services">Backend Services</SelectItem>
+                    <SelectItem value="Billing Services">Billing Services</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
             </div>
             
             <div className="grid gap-2">
-              <Label htmlFor="status">Initial Status</Label>
+              <Label htmlFor="status">Current Status</Label>
               <Select 
                 value={newService.status} 
                 onValueChange={(value: ServiceStatus) => setNewService({...newService, status: value})}
@@ -377,102 +583,67 @@ const Services = () => {
             </Button>
             <Button 
               onClick={handleAddService} 
-              disabled={!newService.name || !newService.description}
+              disabled={isSubmitting || !newService.name || !newService.description}
             >
-              Add Service
+              {isSubmitting ? "Adding..." : "Add Service"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
       
-      {/* Add Group Dialog */}
-      <Dialog open={isAddGroupOpen} onOpenChange={setIsAddGroupOpen}>
+      <Dialog open={isEditServiceOpen} onOpenChange={setIsEditServiceOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Add New Group</DialogTitle>
+            <DialogTitle>Edit Service</DialogTitle>
             <DialogDescription>
-              Create a new group to organize your services.
+              Update the details of your service.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="groupName">Group Name</Label>
-              <Input
-                id="groupName"
-                placeholder="e.g., Frontend, Backend, Infrastructure"
-                value={newGroup.name}
-                onChange={(e) => setNewGroup({...newGroup, name: e.target.value})}
-              />
-            </div>
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddGroupOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleAddGroup} 
-              disabled={!newGroup.name}
-            >
-              Add Group
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Edit Service Dialog */}
-      {editingService && (
-        <Dialog open={isEditServiceOpen} onOpenChange={setIsEditServiceOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Edit Service</DialogTitle>
-              <DialogDescription>
-                Update this service's details and status.
-              </DialogDescription>
-            </DialogHeader>
-            
+          {editingService && (
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="editName">Service Name</Label>
+                <Label htmlFor="edit-name">Service Name</Label>
                 <Input
-                  id="editName"
+                  id="edit-name"
+                  placeholder="e.g., API, Database, Website"
                   value={editingService.name}
                   onChange={(e) => setEditingService({...editingService, name: e.target.value})}
                 />
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="editDescription">Description</Label>
+                <Label htmlFor="edit-description">Description</Label>
                 <Textarea
-                  id="editDescription"
+                  id="edit-description"
+                  placeholder="Briefly describe this service..."
                   value={editingService.description}
                   onChange={(e) => setEditingService({...editingService, description: e.target.value})}
                 />
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="editGroup">Group</Label>
+                <Label htmlFor="edit-group">Group</Label>
                 <Select 
-                  value={editingService.groupId || ""} 
-                  onValueChange={(value) => setEditingService({...editingService, groupId: value || undefined})}
+                  value={editingService.group} 
+                  onValueChange={(value) => setEditingService({...editingService, group: value})}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select a group" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">None</SelectItem>
-                    {serviceGroups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name}
-                      </SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectItem value="Frontend Services">Frontend Services</SelectItem>
+                      <SelectItem value="Backend Services">Backend Services</SelectItem>
+                      <SelectItem value="Billing Services">Billing Services</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
               
               <div className="grid gap-2">
-                <Label htmlFor="editStatus">Status</Label>
+                <Label htmlFor="edit-status">Current Status</Label>
                 <Select 
                   value={editingService.status} 
                   onValueChange={(value: ServiceStatus) => setEditingService({...editingService, status: value})}
@@ -482,7 +653,7 @@ const Services = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="operational">Operational</SelectItem>
-                    <SelectItem value="degraded">Degraded Performance</SelectItem>
+                    <SelectItem value="degraded_performance">Degraded Performance</SelectItem>
                     <SelectItem value="partial_outage">Partial Outage</SelectItem>
                     <SelectItem value="major_outage">Major Outage</SelectItem>
                     <SelectItem value="maintenance">Under Maintenance</SelectItem>
@@ -490,21 +661,78 @@ const Services = () => {
                 </Select>
               </div>
             </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsEditServiceOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleEditService} 
-                disabled={!editingService.name || !editingService.description}
-              >
-                Update Service
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditServiceOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditService} 
+              disabled={isSubmitting || !editingService?.name || !editingService?.description}
+            >
+              {isSubmitting ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Confirm Deletion</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this service? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {serviceToDelete && (
+            <div className="py-4">
+              <div className="bg-muted p-4 rounded-md space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Name:</span>
+                  <span>{serviceToDelete.name}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Group:</span>
+                  <span>{serviceToDelete.group || "Other"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">Status:</span>
+                  <span>{getStatusBadge(serviceToDelete.status as ServiceStatus)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsDeleteConfirmOpen(false);
+                setServiceToDelete(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleDeleteService}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+                  Deleting...
+                </>
+              ) : (
+                "Delete Service"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

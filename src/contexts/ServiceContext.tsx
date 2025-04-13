@@ -1,7 +1,7 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
-export type ServiceStatus = "operational" | "degraded" | "partial_outage" | "major_outage" | "maintenance";
+export type ServiceStatus = "operational" | "degraded_performance" | "partial_outage" | "major_outage" | "maintenance";
 
 export type Service = {
   id: string;
@@ -9,7 +9,7 @@ export type Service = {
   description: string;
   status: ServiceStatus;
   lastUpdated: Date;
-  groupId?: string;
+  group?: string;
   uptime?: number; // percentage
 };
 
@@ -92,7 +92,7 @@ const generateMockServices = (): Service[] => {
       status: "operational",
       lastUpdated: new Date(),
       uptime: 99.98,
-      groupId: "grp_1"
+      group: "grp_1"
     },
     {
       id: "srv_2",
@@ -101,7 +101,7 @@ const generateMockServices = (): Service[] => {
       status: "operational",
       lastUpdated: new Date(),
       uptime: 99.95,
-      groupId: "grp_1"
+      group: "grp_1"
     },
     {
       id: "srv_3",
@@ -110,7 +110,7 @@ const generateMockServices = (): Service[] => {
       status: "operational",
       lastUpdated: new Date(),
       uptime: 99.99,
-      groupId: "grp_2"
+      group: "grp_2"
     },
     {
       id: "srv_4",
@@ -119,16 +119,16 @@ const generateMockServices = (): Service[] => {
       status: "operational",
       lastUpdated: new Date(),
       uptime: 99.9,
-      groupId: "grp_2"
+      group: "grp_2"
     },
     {
       id: "srv_5",
       name: "Payment Processing",
       description: "Payment processing services",
-      status: "degraded",
+      status: "degraded_performance",
       lastUpdated: new Date(),
       uptime: 98.5,
-      groupId: "grp_3"
+      group: "grp_3"
     }
   ];
 };
@@ -350,8 +350,8 @@ export const ServiceProvider = ({ children }: { children: ReactNode }) => {
     // Update services that were in this group
     setServices(
       services.map(service => 
-        service.groupId === id 
-          ? { ...service, groupId: undefined } 
+        service.group === id 
+          ? { ...service, group: undefined } 
           : service
       )
     );
@@ -364,8 +364,8 @@ export const ServiceProvider = ({ children }: { children: ReactNode }) => {
       return "major_outage";
     } else if (services.some(service => service.status === "partial_outage")) {
       return "partial_outage";
-    } else if (services.some(service => service.status === "degraded")) {
-      return "degraded";
+    } else if (services.some(service => service.status === "degraded_performance")) {
+      return "degraded_performance";
     } else if (services.every(service => service.status === "maintenance")) {
       return "maintenance";
     } else {

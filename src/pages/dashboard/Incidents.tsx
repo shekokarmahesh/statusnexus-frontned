@@ -1,6 +1,4 @@
-
-import { useState } from "react";
-import { useServices, Incident, IncidentUpdate } from "@/contexts/ServiceContext";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,75 +46,292 @@ import { Badge } from "@/components/ui/badge";
 import { 
   Plus, 
   MoreVertical, 
-  Trash2, 
   MessageSquarePlus,
   Search, 
   XCircle,
   AlertTriangle,
   AlertCircle,
-  CheckCircle 
+  CheckCircle,
+  Pencil
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
+import { useAuth } from "@clerk/clerk-react";
+
+// Incident types based on your API
+interface IncidentUpdate {
+  _id?: string;
+  message: string;
+  status: "investigating" | "identified" | "monitoring" | "resolved";
+  createdBy: string;
+  createdAt?: Date;
+}
+
+interface Incident {
+  _id: string;
+  title: string;
+  type: string;
+  impact: "minor" | "major" | "critical";
+  status: "investigating" | "identified" | "monitoring" | "resolved";
+  services: Array<{
+    _id: string;
+    name: string;
+    status: string;
+  }>;
+  updates: IncidentUpdate[];
+  organizationId: string;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const Incidents = () => {
-  const { services, incidents, addIncident, addIncidentUpdate, deleteIncident } = useServices();
   const [isAddIncidentOpen, setIsAddIncidentOpen] = useState(false);
   const [isAddUpdateOpen, setIsAddUpdateOpen] = useState(false);
-  const [currentIncident, setCurrentIncident] = useState<Incident | null>(null);
+  const [isEditIncidentOpen, setIsEditIncidentOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
+  const { getToken } = useAuth();
   
-  // Form state for adding a new incident with proper typing
-  const [newIncident, setNewIncident] = useState<{
-    title: string;
-    description: string;
-    status: "investigating" | "identified" | "monitoring" | "resolved";
-    severity: "minor" | "major" | "critical";
-    affectedServices: string[];
-  }>({
+  // State for API data
+  const [apiIncidents, setApiIncidents] = useState<Incident[]>([]);
+  const [apiServices, setApiServices] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // State for editing
+  const [currentIncident, setCurrentIncident] = useState<Incident | null>(null);
+  
+  // Form state for adding a new incident
+  const [newIncident, setNewIncident] = useState({
     title: "",
-    description: "",
-    status: "investigating",
-    severity: "minor",
-    affectedServices: [],
+    type: "incident", // Change from "outage" to "incident" to match backend schema
+    impact: "minor" as "minor" | "major" | "critical",
+    serviceIds: [] as string[],
   });
   
-  // Form state for adding a new update with proper typing
-  const [newUpdate, setNewUpdate] = useState<{
-    message: string;
-    status: "investigating" | "identified" | "monitoring" | "resolved";
-    user: string;
-  }>({
+  // Form state for adding a new update
+  const [newUpdate, setNewUpdate] = useState({
     message: "",
-    status: "investigating",
-    user: "System Administrator",
+    status: "investigating" as "investigating" | "identified" | "monitoring" | "resolved",
   });
+  
+  // Form state for editing an incident
+  const [editingIncident, setEditingIncident] = useState<{
+    _id: string;
+    status: "investigating" | "identified" | "monitoring" | "resolved";
+    impact: "minor" | "major" | "critical";
+  } | null>(null);
+  
+  // Fetch incidents and services on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        const token = await getToken();
+        
+        if (!token) {
+          throw new Error("Authentication token is missing. Please log in again.");
+        }
+        
+        // Fetch incidents
+        const incidentsResponse = await fetch('http://localhost:3000/api/incidents', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+        });
+        
+        if (!incidentsResponse.ok) {
+          throw new Error(`API request failed with status: ${incidentsResponse.status}`);
+        }
+        
+        const incidentsData = await incidentsResponse.json();
+        
+        // Fetch services for the dropdown
+        const servicesResponse = await fetch('http://localhost:3000/api/services', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+        });
+        
+        if (!servicesResponse.ok) {
+          throw new Error(`Services API request failed with status: ${servicesResponse.status}`);
+        }
+        
+        const servicesData = await servicesResponse.json();
+        
+        if (incidentsData && incidentsData.incidents) {
+          setApiIncidents(incidentsData.incidents);
+        } else {
+          console.warn('API response is not in expected format:', incidentsData);
+          setApiIncidents([]);
+        }
+        
+        if (Array.isArray(servicesData)) {
+          setApiServices(servicesData);
+        } else if (servicesData && typeof servicesData === 'object' && servicesData.services) {
+          setApiServices(servicesData.services);
+        } else {
+          console.warn('Services API response is not in expected format:', servicesData);
+          setApiServices([]);
+        }
+        
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch data');
+        toast({
+          title: "Error fetching incidents",
+          description: err instanceof Error ? err.message : 'An error occurred',
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [toast, getToken]);
   
   // Filter incidents based on search query
-  const filteredIncidents = incidents.filter(incident => 
-    incident.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    incident.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredIncidents = searchQuery.trim() === '' 
+    ? apiIncidents
+    : apiIncidents.filter(incident => 
+        incident.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        incident.type.toLowerCase().includes(searchQuery.toLowerCase())
+      );
   
-  // Handle add incident form submission
-  const handleAddIncident = () => {
-    addIncident(newIncident);
+  // Handle adding a new incident
+  const handleAddIncident = async () => {
+    if (!newIncident.title || newIncident.serviceIds.length === 0) return;
     
-    toast({
-      title: "Incident created",
-      description: "The incident has been created and published."
-    });
+    setIsSubmitting(true);
     
-    // Reset form and close dialog
-    setNewIncident({
-      title: "",
-      description: "",
-      status: "investigating",
-      severity: "minor",
-      affectedServices: [],
+    try {
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      const response = await fetch('http://localhost:3000/api/incidents', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: newIncident.title,
+          type: newIncident.type,
+          impact: newIncident.impact,
+          serviceIds: newIncident.serviceIds,
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to create incident (Status: ${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      setApiIncidents(prevIncidents => [...prevIncidents, data.incident]);
+      
+      toast({
+        title: "Incident created",
+        description: `${newIncident.title} has been created successfully.`
+      });
+      
+      setNewIncident({
+        title: "",
+        type: "incident", // Change from "outage" to "incident"
+        impact: "minor",
+        serviceIds: [],
+      });
+      setIsAddIncidentOpen(false);
+      
+    } catch (err) {
+      console.error('Error creating incident:', err);
+      toast({
+        title: "Error creating incident",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  // Open the edit incident dialog
+  const handleOpenEditDialog = (incident: Incident) => {
+    setEditingIncident({
+      _id: incident._id,
+      status: incident.status,
+      impact: incident.impact,
     });
-    setIsAddIncidentOpen(false);
+    setIsEditIncidentOpen(true);
+  };
+  
+  // Handle editing an incident
+  const handleEditIncident = async () => {
+    if (!editingIncident) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      const response = await fetch(`http://localhost:3000/api/incidents/${editingIncident._id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: editingIncident.status,
+          impact: editingIncident.impact,
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to update incident (Status: ${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      setApiIncidents(prevIncidents => prevIncidents.map(incident => 
+        incident._id === editingIncident._id ? data.incident : incident
+      ));
+      
+      toast({
+        title: "Incident updated",
+        description: "The incident has been updated successfully."
+      });
+      
+      setEditingIncident(null);
+      setIsEditIncidentOpen(false);
+      
+    } catch (err) {
+      console.error('Error updating incident:', err);
+      toast({
+        title: "Error updating incident",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
   
   // Open add update dialog
@@ -125,36 +340,64 @@ const Incidents = () => {
     setNewUpdate({
       message: "",
       status: incident.status,
-      user: "System Administrator",
     });
     setIsAddUpdateOpen(true);
   };
   
-  // Handle add update form submission
-  const handleAddUpdate = () => {
-    if (currentIncident) {
-      addIncidentUpdate(currentIncident.id, newUpdate);
+  // Handle adding an update to an incident
+  const handleAddUpdate = async () => {
+    if (!currentIncident || !newUpdate.message) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const token = await getToken();
+      
+      if (!token) {
+        throw new Error("Authentication token is missing. Please log in again.");
+      }
+      
+      const response = await fetch(`http://localhost:3000/api/incidents/${currentIncident._id}/updates`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: newUpdate.message,
+          status: newUpdate.status,
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to add update (Status: ${response.status})`);
+      }
+      
+      const data = await response.json();
+      
+      setApiIncidents(prevIncidents => prevIncidents.map(incident => 
+        incident._id === currentIncident._id ? data.incident : incident
+      ));
       
       toast({
         title: "Update added",
-        description: "The incident has been updated."
+        description: "The incident has been updated successfully."
       });
       
-      setIsAddUpdateOpen(false);
       setCurrentIncident(null);
-    }
-  };
-  
-  // Handle delete incident
-  const handleDeleteIncident = (incidentId: string) => {
-    const incidentToDelete = incidents.find(i => i.id === incidentId);
-    if (incidentToDelete) {
-      deleteIncident(incidentId);
+      setNewUpdate({ message: "", status: "investigating" });
+      setIsAddUpdateOpen(false);
       
+    } catch (err) {
+      console.error('Error adding update:', err);
       toast({
-        title: "Incident deleted",
-        description: `"${incidentToDelete.title}" has been deleted.`
+        title: "Error adding update",
+        description: err instanceof Error ? err.message : 'An unknown error occurred',
+        variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -164,24 +407,28 @@ const Incidents = () => {
       case "investigating":
         return (
           <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200">
+            <AlertTriangle className="mr-1 h-3 w-3" />
             Investigating
           </Badge>
         );
       case "identified":
         return (
           <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200">
+            <AlertCircle className="mr-1 h-3 w-3" />
             Identified
           </Badge>
         );
       case "monitoring":
         return (
           <Badge variant="outline" className="bg-indigo-100 text-indigo-800 border-indigo-200">
+            <AlertCircle className="mr-1 h-3 w-3" />
             Monitoring
           </Badge>
         );
       case "resolved":
         return (
           <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200">
+            <CheckCircle className="mr-1 h-3 w-3" />
             Resolved
           </Badge>
         );
@@ -190,39 +437,17 @@ const Incidents = () => {
     }
   };
   
-  // Get severity badge
-  const getSeverityBadge = (severity: string) => {
-    switch (severity) {
+  // Get severity/impact badge
+  const getImpactBadge = (impact: string) => {
+    switch (impact) {
       case "minor":
-        return (
-          <Badge className="bg-yellow-500">Minor</Badge>
-        );
+        return <Badge className="bg-yellow-500">Minor</Badge>;
       case "major":
-        return (
-          <Badge className="bg-orange-500">Major</Badge>
-        );
+        return <Badge className="bg-orange-500">Major</Badge>;
       case "critical":
-        return (
-          <Badge className="bg-red-500">Critical</Badge>
-        );
+        return <Badge className="bg-red-500">Critical</Badge>;
       default:
         return <Badge>Unknown</Badge>;
-    }
-  };
-  
-  // Get status icon
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "investigating":
-        return <AlertTriangle className="h-4 w-4 text-amber-500" />;
-      case "identified":
-        return <AlertCircle className="h-4 w-4 text-blue-500" />;
-      case "monitoring":
-        return <AlertCircle className="h-4 w-4 text-indigo-500" />;
-      case "resolved":
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      default:
-        return null;
     }
   };
   
@@ -236,10 +461,12 @@ const Incidents = () => {
           </p>
         </div>
         
-        <Button onClick={() => setIsAddIncidentOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Incident
-        </Button>
+        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+          <Button onClick={() => setIsAddIncidentOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Incident
+          </Button>
+        </div>
       </div>
       
       {/* Search */}
@@ -268,26 +495,45 @@ const Incidents = () => {
         <CardHeader className="pb-3">
           <CardTitle>Incident List</CardTitle>
           <CardDescription>
-            Total incidents: {incidents.length}
+            {searchQuery.trim() !== '' ? 
+              `Showing ${filteredIncidents.length} of ${apiIncidents.length} incidents` : 
+              `Total incidents: ${apiIncidents.length}`}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredIncidents.length === 0 ? (
-            <div className="text-center py-10">
-              {searchQuery ? (
-                <p className="text-muted-foreground">No incidents matching your search.</p>
-              ) : (
-                <>
-                  <p className="text-muted-foreground">No incidents have been reported.</p>
-                  <Button
-                    variant="link"
-                    onClick={() => setIsAddIncidentOpen(true)}
-                    className="mt-2"
-                  >
-                    Create your first incident
-                  </Button>
-                </>
-              )}
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+              <span className="ml-3">Loading incidents...</span>
+            </div>
+          ) : error ? (
+            <div className="bg-destructive/15 text-destructive p-4 rounded-md">
+              <p className="font-semibold">Error loading incidents</p>
+              <p className="text-sm">{error}</p>
+              <Button 
+                variant="outline" 
+                className="mt-2"
+                onClick={() => window.location.reload()}
+              >
+                Try again
+              </Button>
+            </div>
+          ) : apiIncidents.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No incidents found.</p>
+            </div>
+          ) : filteredIncidents.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                No incidents matching "<span className="font-medium">{searchQuery}</span>".
+              </p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setSearchQuery("")}
+              >
+                Clear search
+              </Button>
             </div>
           ) : (
             <div className="rounded-md border">
@@ -295,28 +541,27 @@ const Incidents = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Title</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Severity</TableHead>
+                    <TableHead>Impact</TableHead>
                     <TableHead>Affected Services</TableHead>
                     <TableHead>Created</TableHead>
-                    <TableHead className="w-32">Actions</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredIncidents.map((incident) => (
-                    <TableRow key={incident.id}>
+                    <TableRow key={incident._id}>
                       <TableCell className="font-medium">{incident.title}</TableCell>
+                      <TableCell>{incident.type}</TableCell>
                       <TableCell>{getStatusBadge(incident.status)}</TableCell>
-                      <TableCell>{getSeverityBadge(incident.severity)}</TableCell>
+                      <TableCell>{getImpactBadge(incident.impact)}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
-                          {incident.affectedServices.map(serviceId => {
-                            const service = services.find(s => s.id === serviceId);
-                            return service ? (
-                              <Badge key={serviceId} variant="outline">{service.name}</Badge>
-                            ) : null;
-                          })}
-                          {incident.affectedServices.length === 0 && (
+                          {incident.services.map(service => (
+                            <Badge key={service._id} variant="outline">{service.name}</Badge>
+                          ))}
+                          {incident.services.length === 0 && (
                             <span className="text-muted-foreground text-sm">None</span>
                           )}
                         </div>
@@ -325,44 +570,15 @@ const Incidents = () => {
                         {format(new Date(incident.createdAt), "MMM d, h:mm a")}
                       </TableCell>
                       <TableCell>
-                        <div className="flex space-x-1">
-                          {incident.status !== "resolved" && (
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => openAddUpdateDialog(incident)}
-                            >
-                              <MessageSquarePlus className="h-4 w-4" />
-                              <span className="sr-only">Add Update</span>
-                            </Button>
-                          )}
-                          
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <MoreVertical className="h-4 w-4" />
-                                <span className="sr-only">Actions</span>
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              {incident.status !== "resolved" && (
-                                <DropdownMenuItem onClick={() => openAddUpdateDialog(incident)}>
-                                  <MessageSquarePlus className="mr-2 h-4 w-4" />
-                                  Add Update
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem 
-                                onClick={() => handleDeleteIncident(incident.id)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleOpenEditDialog(incident)}
+                          title="Edit Incident"
+                        >
+                          <Pencil className="h-4 w-4" />
+                          <span className="sr-only">Edit</span>
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -395,75 +611,58 @@ const Incidents = () => {
             </div>
             
             <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="Describe what's happening with this incident..."
-                rows={3}
-                value={newIncident.description}
-                onChange={(e) => setNewIncident({...newIncident, description: e.target.value})}
-              />
+              <Label htmlFor="type">Incident Type</Label>
+              <Select 
+                value={newIncident.type} 
+                onValueChange={(value) => setNewIncident({...newIncident, type: value})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select incident type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="incident">Incident</SelectItem>
+                  <SelectItem value="maintenance">Scheduled Maintenance</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="status">Status</Label>
-                <Select 
-                  value={newIncident.status} 
-                  onValueChange={(value: "investigating" | "identified" | "monitoring" | "resolved") => 
-                    setNewIncident({...newIncident, status: value})
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="investigating">Investigating</SelectItem>
-                    <SelectItem value="identified">Identified</SelectItem>
-                    <SelectItem value="monitoring">Monitoring</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="grid gap-2">
-                <Label htmlFor="severity">Severity</Label>
-                <Select 
-                  value={newIncident.severity} 
-                  onValueChange={(value: "minor" | "major" | "critical") => 
-                    setNewIncident({...newIncident, severity: value})
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select severity" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="minor">Minor</SelectItem>
-                    <SelectItem value="major">Major</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="grid gap-2">
+              <Label htmlFor="impact">Impact Level</Label>
+              <Select 
+                value={newIncident.impact} 
+                onValueChange={(value: "minor" | "major" | "critical") => 
+                  setNewIncident({...newIncident, impact: value})
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select impact level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="minor">Minor</SelectItem>
+                  <SelectItem value="major">Major</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
             <div className="grid gap-2">
               <Label>Affected Services</Label>
-              <div className="flex flex-wrap gap-2 p-2 border rounded-md">
-                {services.length === 0 ? (
+              <div className="flex flex-wrap gap-2 p-3 border rounded-md max-h-[150px] overflow-y-auto">
+                {apiServices.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-1">No services available.</p>
                 ) : (
-                  services.map((service) => (
+                  apiServices.map((service) => (
                     <Badge
-                      key={service.id}
-                      variant={newIncident.affectedServices.includes(service.id) ? "default" : "outline"}
+                      key={service._id}
+                      variant={newIncident.serviceIds.includes(service._id) ? "default" : "outline"}
                       className="cursor-pointer m-1"
                       onClick={() => {
-                        const isSelected = newIncident.affectedServices.includes(service.id);
+                        const isSelected = newIncident.serviceIds.includes(service._id);
                         setNewIncident({
                           ...newIncident,
-                          affectedServices: isSelected
-                            ? newIncident.affectedServices.filter(id => id !== service.id)
-                            : [...newIncident.affectedServices, service.id]
+                          serviceIds: isSelected
+                            ? newIncident.serviceIds.filter(id => id !== service._id)
+                            : [...newIncident.serviceIds, service._id]
                         });
                       }}
                     >
@@ -472,6 +671,9 @@ const Incidents = () => {
                   ))
                 )}
               </div>
+              {newIncident.serviceIds.length === 0 && (
+                <p className="text-xs text-destructive mt-1">At least one service must be selected</p>
+              )}
             </div>
           </div>
           
@@ -481,9 +683,96 @@ const Incidents = () => {
             </Button>
             <Button 
               onClick={handleAddIncident} 
-              disabled={!newIncident.title || !newIncident.description}
+              disabled={isSubmitting || !newIncident.title || newIncident.serviceIds.length === 0}
             >
-              Create Incident
+              {isSubmitting ? "Creating..." : "Create Incident"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Incident Dialog */}
+      <Dialog open={isEditIncidentOpen} onOpenChange={setIsEditIncidentOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Edit Incident</DialogTitle>
+            <DialogDescription>
+              Update the status and impact of this incident.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingIncident && (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-status">Status</Label>
+                <Select 
+                  value={editingIncident.status} 
+                  onValueChange={(value: "investigating" | "identified" | "monitoring" | "resolved") => 
+                    setEditingIncident({...editingIncident, status: value})
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="investigating">
+                      <div className="flex items-center">
+                        <AlertTriangle className="mr-2 h-4 w-4 text-amber-500" />
+                        Investigating
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="identified">
+                      <div className="flex items-center">
+                        <AlertCircle className="mr-2 h-4 w-4 text-blue-500" />
+                        Identified
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="monitoring">
+                      <div className="flex items-center">
+                        <AlertCircle className="mr-2 h-4 w-4 text-indigo-500" />
+                        Monitoring
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="resolved">
+                      <div className="flex items-center">
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                        Resolved
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="grid gap-2">
+                <Label htmlFor="edit-impact">Impact Level</Label>
+                <Select 
+                  value={editingIncident.impact} 
+                  onValueChange={(value: "minor" | "major" | "critical") => 
+                    setEditingIncident({...editingIncident, impact: value})
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select impact level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                  <SelectItem value="minor">Minor</SelectItem>
+                    <SelectItem value="major">Major</SelectItem>
+                    <SelectItem value="critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditIncidentOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleEditIncident} 
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -562,9 +851,9 @@ const Incidents = () => {
             </Button>
             <Button 
               onClick={handleAddUpdate} 
-              disabled={!newUpdate.message}
+              disabled={isSubmitting || !newUpdate.message}
             >
-              Post Update
+              {isSubmitting ? "Posting..." : "Post Update"}
             </Button>
           </DialogFooter>
         </DialogContent>

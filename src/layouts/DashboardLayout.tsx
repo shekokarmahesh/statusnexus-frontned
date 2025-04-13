@@ -1,14 +1,12 @@
-
 import { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+import { useClerk, useUser, UserButton } from "@clerk/clerk-react";
 import { 
   LayoutDashboard, 
   Server, 
   AlertTriangle, 
   Clock, 
   Settings, 
-  Users, 
   LogOut, 
   Menu,
   X,
@@ -21,7 +19,8 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
 
 const DashboardLayout = () => {
-  const { user, logout, isLoggedIn } = useAuth();
+  const { signOut } = useClerk();
+  const { user, isLoaded } = useUser();
   const { theme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,10 +42,10 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     // Redirect to login if not logged in
-    if (!isLoggedIn) {
-      navigate("/login");
+    if (isLoaded && !user) {
+      navigate("/sign-in");
     }
-  }, [isLoggedIn, navigate]);
+  }, [isLoaded, user, navigate]);
 
   // Close mobile sidebar when navigating to a new route
   useEffect(() => {
@@ -54,8 +53,9 @@ const DashboardLayout = () => {
   }, [location.pathname]);
 
   const handleLogout = () => {
-    logout();
-    navigate("/login");
+    signOut().then(() => {
+      navigate("/sign-in");
+    });
   };
 
   const navigationItems = [
@@ -63,17 +63,26 @@ const DashboardLayout = () => {
     { name: "Services", path: "/dashboard/services", icon: Server },
     { name: "Incidents", path: "/dashboard/incidents", icon: AlertTriangle },
     { name: "Maintenance", path: "/dashboard/maintenance", icon: Clock },
-    { name: "Teams", path: "/dashboard/teams", icon: Users },
-    { name: "Settings", path: "/dashboard/settings", icon: Settings },
+    { 
+      name: "Settings", 
+      path: "/dashboard/settings", 
+      icon: Settings
+    },
   ];
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
-  if (!isLoggedIn) {
+  if (!isLoaded || !user) {
     return <div>Loading...</div>;
   }
+
+  // Extract organization name from user metadata (if available)
+  const organizationName = user.organizationMemberships?.[0]?.organization.name || "Your Organization";
+  const userName = user.fullName || user.firstName || "User";
+  const userEmail = user.primaryEmailAddress?.emailAddress || "";
+  const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <div className="flex h-screen bg-background text-foreground">
@@ -97,36 +106,42 @@ const DashboardLayout = () => {
           <div className="p-4 border-b border-sidebar-border">
             <h2 className="text-xl font-bold">Status Dashboard</h2>
             <div className="mt-2 text-sm text-sidebar-foreground/70">
-              {user?.organization.name}
+              {organizationName}
             </div>
           </div>
           
           <nav className="flex-1 px-2 py-4 space-y-1">
             {navigationItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center px-4 py-2 rounded-md transition-colors",
-                  location.pathname === item.path
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-                )}
-              >
-                <item.icon className="h-5 w-5 mr-3" />
-                {item.name}
-              </Link>
+              <div key={item.path}>
+                <Link
+                  to={item.path}
+                  className={cn(
+                    "flex items-center px-4 py-2 rounded-md transition-colors",
+                    location.pathname === item.path
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                  )}
+                >
+                  <item.icon className="h-5 w-5 mr-3" />
+                  {item.name}
+                </Link>
+              </div>
             ))}
           </nav>
           
           <div className="p-4 border-t border-sidebar-border">
             <div className="flex items-center mb-4">
-              <div className="h-8 w-8 rounded-full bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground">
-                {user?.name.charAt(0).toUpperCase()}
-              </div>
+              <UserButton 
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: "h-8 w-8"
+                  }
+                }}
+                signInUrl="/sign-in"
+              />
               <div className="ml-3">
-                <p className="text-sm font-medium">{user?.name}</p>
-                <p className="text-xs text-sidebar-foreground/70">{user?.email}</p>
+                <p className="text-sm font-medium">{userName}</p>
+                <p className="text-xs text-sidebar-foreground/70">{userEmail}</p>
               </div>
             </div>
             <button
@@ -134,7 +149,7 @@ const DashboardLayout = () => {
               className="flex items-center w-full px-4 py-2 text-left text-destructive hover:bg-sidebar-accent/50 rounded-md"
             >
               <LogOut className="h-5 w-5 mr-3" />
-              Log out
+              Sign out
             </button>
           </div>
         </div>
@@ -166,21 +181,22 @@ const DashboardLayout = () => {
         
         <nav className="flex-1 px-2 py-4 space-y-1">
           {navigationItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex items-center rounded-md transition-colors",
-                isSidebarCollapsed ? "justify-center px-2 py-2" : "px-4 py-2",
-                location.pathname === item.path
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/50"
-              )}
-              title={isSidebarCollapsed ? item.name : undefined}
-            >
-              <item.icon className={cn("h-5 w-5", !isSidebarCollapsed && "mr-3")} />
-              {!isSidebarCollapsed && item.name}
-            </Link>
+            <div key={item.path}>
+              <Link
+                to={item.path}
+                className={cn(
+                  "flex items-center rounded-md transition-colors",
+                  isSidebarCollapsed ? "justify-center px-2 py-2" : "px-4 py-2",
+                  location.pathname === item.path
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground hover:bg-sidebar-accent/50"
+                )}
+                title={isSidebarCollapsed ? item.name : undefined}
+              >
+                <item.icon className={cn("h-5 w-5", !isSidebarCollapsed && "mr-3")} />
+                {!isSidebarCollapsed && item.name}
+              </Link>
+            </div>
           ))}
         </nav>
         
@@ -191,12 +207,17 @@ const DashboardLayout = () => {
           {!isSidebarCollapsed ? (
             <>
               <div className="flex items-center mb-4">
-                <div className="h-8 w-8 rounded-full bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground">
-                  {user?.name.charAt(0).toUpperCase()}
-                </div>
+                <UserButton 
+                  appearance={{
+                    elements: {
+                      userButtonAvatarBox: "h-8 w-8"
+                    }
+                  }}
+                  signInUrl="/sign-in"
+                />
                 <div className="ml-3">
-                  <p className="text-sm font-medium">{user?.name}</p>
-                  <p className="text-xs text-sidebar-foreground/70">{user?.email}</p>
+                  <p className="text-sm font-medium">{userName}</p>
+                  <p className="text-xs text-sidebar-foreground/70">{userEmail}</p>
                 </div>
               </div>
               <button
@@ -204,17 +225,22 @@ const DashboardLayout = () => {
                 className="flex items-center w-full px-4 py-2 text-left text-destructive hover:bg-sidebar-accent/50 rounded-md"
               >
                 <LogOut className="h-5 w-5 mr-3" />
-                Log out
+                Sign out
               </button>
             </>
           ) : (
             <>
-              <div className="h-8 w-8 mb-4 rounded-full bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground">
-                {user?.name.charAt(0).toUpperCase()}
-              </div>
+              <UserButton 
+                appearance={{
+                  elements: {
+                    userButtonAvatarBox: "h-8 w-8"
+                  }
+                }}
+                signInUrl="/sign-in"
+              />
               <button
                 onClick={handleLogout}
-                className="flex items-center justify-center w-8 h-8 text-destructive hover:bg-sidebar-accent/50 rounded-md"
+                className="flex items-center justify-center w-8 h-8 mt-4 text-destructive hover:bg-sidebar-accent/50 rounded-md"
                 title="Log out"
               >
                 <LogOut className="h-5 w-5" />
@@ -244,7 +270,7 @@ const DashboardLayout = () => {
               
               <div className="flex items-center space-x-3">
                 <ThemeToggle variant="ghost" />
-                <Link to="/" target="_blank" className="text-primary text-sm hover:underline">
+                <Link to="/public" target="_blank" className="text-primary text-sm hover:underline">
                   View public status page
                 </Link>
               </div>

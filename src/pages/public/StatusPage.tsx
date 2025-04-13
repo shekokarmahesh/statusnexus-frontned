@@ -17,7 +17,7 @@ const StatusPage = () => {
     switch (status) {
       case "operational":
         return "bg-status-operational";
-      case "degraded":
+      case "degraded_performance":
         return "bg-status-degraded";
       case "partial_outage":
         return "bg-status-partial";
@@ -34,7 +34,7 @@ const StatusPage = () => {
     switch (status) {
       case "operational":
         return <Badge className="bg-status-operational hover:bg-status-operational">Operational</Badge>;
-      case "degraded":
+      case "degraded_performance":
         return <Badge className="bg-status-degraded hover:bg-status-degraded">Degraded</Badge>;
       case "partial_outage":
         return <Badge className="bg-status-partial hover:bg-status-partial">Partial Outage</Badge>;
@@ -51,7 +51,7 @@ const StatusPage = () => {
     switch (status) {
       case "operational":
         return <CheckCircle className="h-6 w-6 text-status-operational" />;
-      case "degraded":
+      case "degraded_performance":
         return <AlertTriangle className="h-6 w-6 text-status-degraded" />;
       case "partial_outage":
         return <AlertTriangle className="h-6 w-6 text-status-partial" />;
@@ -68,7 +68,7 @@ const StatusPage = () => {
     switch (status) {
       case "operational":
         return "All systems operational";
-      case "degraded":
+      case "degraded_performance":
         return "Some systems experiencing degraded performance";
       case "partial_outage":
         return "Some systems experiencing a partial outage";
@@ -92,7 +92,7 @@ const StatusPage = () => {
   
   // Group services by their service group
   const servicesByGroup = serviceGroups.map(group => {
-    const servicesInGroup = services.filter(service => service.groupId === group.id);
+    const servicesInGroup = services.filter(service => service.group === group.id);
     return {
       ...group,
       services: servicesInGroup
@@ -100,7 +100,7 @@ const StatusPage = () => {
   });
   
   // Find services that don't belong to any group
-  const ungroupedServices = services.filter(service => !service.groupId);
+  const ungroupedServices = services.filter(service => !service.group);
 
   return (
     <div className="min-h-screen bg-gray-50">

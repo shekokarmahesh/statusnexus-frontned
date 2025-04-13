@@ -1,4 +1,3 @@
-
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { 
@@ -51,10 +50,10 @@ const Landing = () => {
           
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="sm" asChild>
-              <Link to="/login">Log in</Link>
+              <Link to="/sign-in">Log in</Link>
             </Button>
             <Button size="sm" asChild className="rounded-full px-4">
-              <Link to="/register">Start for free</Link>
+              <Link to="/sign-up">Start for free</Link>
             </Button>
           </div>
         </div>
@@ -81,7 +80,7 @@ const Landing = () => {
             
             <div className="flex flex-col sm:flex-row gap-4">
               <Button size="lg" className="rounded-full" asChild>
-                <Link to="/register">
+                <Link to="/sign-up">
                   Get started for free <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -442,7 +441,7 @@ const Landing = () => {
               </CardContent>
               <CardFooter>
                 <Button variant="outline" className="w-full" asChild>
-                  <Link to="/register">Get Started</Link>
+                  <Link to="/sign-up">Get Started</Link>
                 </Button>
               </CardFooter>
             </Card>
@@ -483,7 +482,7 @@ const Landing = () => {
               </CardContent>
               <CardFooter>
                 <Button className="w-full" asChild>
-                  <Link to="/register">Get Started</Link>
+                  <Link to="/sign-up">Get Started</Link>
                 </Button>
               </CardFooter>
             </Card>
@@ -540,7 +539,7 @@ const Landing = () => {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" variant="secondary" className="rounded-full" asChild>
-                <Link to="/register">
+                <Link to="/sign-up">
                   Get started for free <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
