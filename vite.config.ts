@@ -8,6 +8,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    allowedHosts: ["statusnexus-frontned.onrender.com"]
   },
   plugins: [
     react(),

@@ -24,7 +24,7 @@ const StatusPage = () => {
   const { getToken } = useAuth();
 
   // Define backend URL
-  const BACKEND_URL = 'localhost:3000';
+  const BACKEND_URL = 'https://status-app-backend-kow1.onrender.com';
 
   // Fetch incidents from API
   useEffect(() => {
