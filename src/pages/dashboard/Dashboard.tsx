@@ -32,7 +32,7 @@ const Dashboard = () => {
         }
         
         // Fetch services
-        const servicesResponse = await fetch('http://localhost:3000/api/services', {
+        const servicesResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/services', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -45,7 +45,7 @@ const Dashboard = () => {
         }
         
         // Fetch incidents
-        const incidentsResponse = await fetch('http://localhost:3000/api/incidents', {
+        const incidentsResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/incidents', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ const Dashboard = () => {
         }
         
         // Fetch maintenance events
-        const maintenanceResponse = await fetch('http://localhost:3000/api/maintenance', {
+        const maintenanceResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/maintenance', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',

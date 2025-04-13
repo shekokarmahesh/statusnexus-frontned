@@ -138,7 +138,7 @@ const Incidents = () => {
         }
         
         // Fetch incidents
-        const incidentsResponse = await fetch('http://localhost:3000/api/incidents', {
+        const incidentsResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/incidents', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -153,7 +153,7 @@ const Incidents = () => {
         const incidentsData = await incidentsResponse.json();
         
         // Fetch services for the dropdown
-        const servicesResponse = await fetch('http://localhost:3000/api/services', {
+        const servicesResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/services', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -220,7 +220,7 @@ const Incidents = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch('http://localhost:3000/api/incidents', {
+      const response = await fetch('https://status-app-backend-kow1.onrender.com/api/incidents', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -291,7 +291,7 @@ const Incidents = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/incidents/${editingIncident._id}`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/incidents/${editingIncident._id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -357,7 +357,7 @@ const Incidents = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/incidents/${currentIncident._id}/updates`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/incidents/${currentIncident._id}/updates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -159,7 +159,7 @@ const Maintenance = () => {
         }
         
         // Fetch maintenance events
-        const maintenanceResponse = await fetch('http://localhost:3000/api/maintenance', {
+        const maintenanceResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/maintenance', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -174,7 +174,7 @@ const Maintenance = () => {
         const maintenanceData = await maintenanceResponse.json();
         
         // Fetch services for the dropdown
-        const servicesResponse = await fetch('http://localhost:3000/api/services', {
+        const servicesResponse = await fetch('https://status-app-backend-kow1.onrender.com/api/services', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -241,7 +241,7 @@ const Maintenance = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch('http://localhost:3000/api/maintenance', {
+      const response = await fetch('https://status-app-backend-kow1.onrender.com/api/maintenance', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -325,7 +325,7 @@ const Maintenance = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/maintenance/${editingMaintenance._id}`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/maintenance/${editingMaintenance._id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -383,7 +383,7 @@ const Maintenance = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/maintenance/${maintenanceId}`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/maintenance/${maintenanceId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -436,7 +436,7 @@ const Maintenance = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/maintenance/${currentMaintenance._id}/updates`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/maintenance/${currentMaintenance._id}/updates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -489,7 +489,7 @@ const Maintenance = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/maintenance/${maintenanceId}`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/maintenance/${maintenanceId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

@@ -95,7 +95,7 @@ const Services = () => {
           throw new Error("Authentication token is missing. Please log in again.");
         }
         
-        const response = await fetch('http://localhost:3000/api/services', {
+        const response = await fetch('https://status-app-backend-kow1.onrender.com/api/services', {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -191,7 +191,7 @@ const Services = () => {
         }
       }
       
-      const response = await fetch('http://localhost:3000/api/services', {
+      const response = await fetch('https://status-app-backend-kow1.onrender.com/api/services', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -261,7 +261,7 @@ const Services = () => {
         throw new Error("Authentication token is missing. Please log in again.");
       }
       
-      const response = await fetch(`http://localhost:3000/api/services/${editingService._id}`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/services/${editingService._id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -331,7 +331,7 @@ const Services = () => {
       }
       
       // Make DELETE request to API endpoint
-      const response = await fetch(`http://localhost:3000/api/services/${serviceToDelete._id}`, {
+      const response = await fetch(`https://status-app-backend-kow1.onrender.com/api/services/${serviceToDelete._id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
