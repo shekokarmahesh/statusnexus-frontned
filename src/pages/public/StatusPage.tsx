@@ -23,8 +23,7 @@ const StatusPage = () => {
   const [maintenanceError, setMaintenanceError] = useState(null);
   const { getToken } = useAuth();
 
-  // Define backend URL
-  const BACKEND_URL = 'status-app-backend-kow1.onrender.com';
+
 
   // Fetch incidents from API
   useEffect(() => {
@@ -40,7 +39,7 @@ const StatusPage = () => {
         }
         
         // Fetch incidents
-        const incidentsResponse = await fetch(`https:/${BACKEND_URL}/api/incidents`, {
+        const incidentsResponse = await fetch(`https://status-app-backend-kow1.onrender.com/api/incidents`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -96,7 +95,7 @@ const StatusPage = () => {
         }
         
         // Fetch maintenance events
-        const maintenanceResponse = await fetch(`https:/${BACKEND_URL}/api/maintenance`, {
+        const maintenanceResponse = await fetch(`https://status-app-backend-kow1.onrender.com/api/maintenance`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -152,7 +151,7 @@ const StatusPage = () => {
         }
         
         // Fetch services
-        const servicesResponse = await fetch(`https:/${BACKEND_URL}/api/services`, {
+        const servicesResponse = await fetch(`https://status-app-backend-kow1.onrender.com/api/services`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
