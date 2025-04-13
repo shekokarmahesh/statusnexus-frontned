@@ -34,7 +34,7 @@ const queryClient = new QueryClient();
 
 // Replace the hardcoded fallback key with an empty string
 // This will prevent the app from using an invalid key when the environment variable is missing
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY || "";
+const clerkPubKey = import.meta.env.CLERK_PUBLISHABLE_KEY || "";
 const isClerkConfigured = Boolean(clerkPubKey && clerkPubKey.startsWith('pk_'));
 
 // Option to add validation
