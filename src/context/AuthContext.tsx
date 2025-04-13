@@ -26,7 +26,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (token) {
         setLoading(true);
         try {
-          const response = await axios.get(`${BACKEND_URL}/api/v1/auth/me`, {
+          interface UserResponse {
+            user: any; // Replace 'any' with the actual user type if known
+          }
+          const response = await axios.get<UserResponse>(`${BACKEND_URL}/api/v1/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -57,7 +60,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         password,
       });
       
-      const { token: newToken, user: userData } = response.data;
+      interface LoginResponse {
+        token: string;
+        user: any; // Replace 'any' with the actual user type if known
+      }
+      const { token: newToken, user: userData } = response.data as LoginResponse;
       
       // Save token to localStorage
       localStorage.setItem('token', newToken);
@@ -85,7 +92,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         password,
       });
       
-      const { token: newToken, user: userData } = response.data;
+      interface RegisterResponse {
+        token: string;
+        user: any; // Replace 'any' with the actual user type if known
+      }
+      const { token: newToken, user: userData } = response.data as RegisterResponse;
       
       // Save token to localStorage
       localStorage.setItem('token', newToken);
